@@ -1,0 +1,38 @@
+name: Deploy to Firebase
+
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install Firebase CLI
+        run: npm i -g firebase-tools
+
+      - name: Write service account
+        run: |
+          printf '%s' "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}" > /tmp/sa.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=/tmp/sa.json" >> $GITHUB_ENV
+
+      - name: Build Functions
+        run: |
+          cd functions
+          npm ci
+          npm run build
+
+      - name: Build Web
+        run: |
+          cd web
+          npm ci
+          npm run build
+
+      - name: Deploy
+        run: firebase deploy --project "${{ secrets.FIREBASE_PROJECT_ID }}" --only firestore:rules,functions,hosting
