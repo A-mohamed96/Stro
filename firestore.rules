@@ -1,0 +1,158 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+
+    function userDoc(orgId) {
+      return get(/databases/$(database)/documents/orgs/$(orgId)/users/$(request.auth.uid));
+    }
+
+    function hasOrgRole(orgId, roles) {
+      return signedIn()
+        && userDoc(orgId).data.orgId == orgId
+        && userDoc(orgId).data.role in roles
+        && userDoc(orgId).data.status == "active";
+    }
+
+    match /orgs/{orgId}/users/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    match /orgs/{orgId}/{coll=**}/{docId} {
+      // deny by default
+      allow read, write: if false;
+    }
+
+    // Admin-ish master data
+    match /orgs/{orgId}/farms/{farmId} {
+      allow read: if hasOrgRole(orgId, ["admin","ops_manager","warehouse","accounting","field"]);
+      allow create, update: if hasOrgRole(orgId, ["admin","ops_manager"]);
+      allow delete: if false;
+    }
+    match /orgs/{orgId}/plants/{plantId} {
+      allow read: if hasOrgRole(orgId, ["admin","ops_manager","warehouse","accounting","field"]);
+      allow create, update: if hasOrgRole(orgId, ["admin"]);
+      allow delete: if false;
+    }
+    match /orgs/{orgId}/trucks/{truckId} {
+      allow read: if hasOrgRole(orgId, ["admin","ops_manager","warehouse","accounting","field"]);
+      allow create, update: if hasOrgRole(orgId, ["admin","ops_manager"]);
+      allow delete: if false;
+    }
+    match /orgs/{orgId}/cartonItems/{itemId} {
+      allow read: if hasOrgRole(orgId, ["admin","ops_manager","warehouse","accounting"]);
+      allow create, update: if hasOrgRole(orgId, ["admin","warehouse"]);
+      allow delete: if false;
+    }
+
+    // Counters: server only
+    match /orgs/{orgId}/counters/{name} {
+      allow read: if hasOrgRole(orgId, ["admin","accounting","ops_manager"]);
+      allow write: if false;
+    }
+
+    // Packaging balances: server only
+    match /orgs/{orgId}/packagingBalances/{ownerKey} {
+      allow read: if hasOrgRole(orgId, ["admin","accounting","ops_manager","warehouse"]);
+      allow write: if false;
+    }
+
+    // Receipt balances and carton balances: server only
+    match /orgs/{orgId}/receiptBalances/{receiptId} {
+      allow read: if hasOrgRole(orgId, ["admin","accounting","ops_manager","warehouse"]);
+      allow write: if false;
+    }
+    match /orgs/{orgId}/cartonBalances/{itemId} {
+      allow read: if hasOrgRole(orgId, ["admin","accounting","ops_manager","warehouse"]);
+      allow write: if false;
+    }
+
+    // Packaging transfers: DRAFT only from client, POSTED by functions
+    match /orgs/{orgId}/packagingTransfers/{docId} {
+      allow read: if hasOrgRole(orgId, ["admin","accounting","ops_manager","warehouse","field"]);
+
+      allow create: if hasOrgRole(orgId, ["admin","ops_manager","warehouse","field"])
+        && request.resource.data.status == "DRAFT"
+        && !("docNo" in request.resource.data);
+
+      allow update: if hasOrgRole(orgId, ["admin","ops_manager","warehouse"])
+        && resource.data.status == "DRAFT"
+        && request.resource.data.status == "DRAFT"
+        && !("docNo" in request.resource.data);
+
+      allow delete: if false;
+    }
+
+    // Inbound receipts: DRAFT only from client, POSTED by functions
+    match /orgs/{orgId}/inboundReceipts/{receiptId} {
+      allow read: if hasOrgRole(orgId, ["admin","accounting","ops_manager","warehouse","field"]);
+
+      allow create: if hasOrgRole(orgId, ["admin","ops_manager","warehouse","field"])
+        && request.resource.data.status == "DRAFT"
+        && !("receiptNo" in request.resource.data);
+
+      allow update: if hasOrgRole(orgId, ["admin","ops_manager","warehouse"])
+        && resource.data.status == "DRAFT"
+        && request.resource.data.status == "DRAFT"
+        && !("receiptNo" in request.resource.data);
+
+      allow delete: if false;
+    }
+
+    // Shipments: DRAFT only from client, POSTED by functions
+    match /orgs/{orgId}/shipments/{shipmentId} {
+      allow read: if hasOrgRole(orgId, ["admin","accounting","ops_manager","warehouse","field"]);
+
+      allow create: if hasOrgRole(orgId, ["admin","ops_manager","warehouse","field"])
+        && request.resource.data.status == "DRAFT"
+        && !("shipmentNo" in request.resource.data);
+
+      allow update: if hasOrgRole(orgId, ["admin","ops_manager","warehouse"])
+        && resource.data.status == "DRAFT"
+        && request.resource.data.status == "DRAFT"
+        && !("shipmentNo" in request.resource.data);
+
+      // POD update by field role allowed on LOADED only (optional simplification)
+      allow update: if hasOrgRole(orgId, ["field"])
+        && resource.data.status == "LOADED"
+        && request.resource.data.status == "DELIVERED";
+
+      allow delete: if false;
+    }
+
+    // Carton purchases & issues: DRAFT only from client, POSTED by functions
+    match /orgs/{orgId}/cartonPurchases/{purchaseId} {
+      allow read: if hasOrgRole(orgId, ["admin","accounting","ops_manager","warehouse"]);
+      allow create: if hasOrgRole(orgId, ["admin","warehouse","accounting"])
+        && request.resource.data.status == "DRAFT";
+      allow update: if hasOrgRole(orgId, ["admin","warehouse","accounting"])
+        && resource.data.status == "DRAFT"
+        && request.resource.data.status == "DRAFT";
+      allow delete: if false;
+    }
+    match /orgs/{orgId}/cartonIssues/{issueId} {
+      allow read: if hasOrgRole(orgId, ["admin","accounting","ops_manager","warehouse"]);
+      allow create: if hasOrgRole(orgId, ["admin","warehouse","ops_manager"])
+        && request.resource.data.status == "DRAFT";
+      allow update: if hasOrgRole(orgId, ["admin","warehouse","ops_manager"])
+        && resource.data.status == "DRAFT"
+        && request.resource.data.status == "DRAFT";
+      allow delete: if false;
+    }
+
+    // Settlements: DRAFT create/update, POSTED by accounting
+    match /orgs/{orgId}/settlements/{settlementId} {
+      allow read: if hasOrgRole(orgId, ["admin","accounting","ops_manager"]);
+      allow create, update: if hasOrgRole(orgId, ["admin","accounting"])
+        && request.resource.data.status in ["DRAFT","POSTED"];
+      allow delete: if false;
+    }
+
+    match /orgs/{orgId}/auditLogs/{logId} {
+      allow read: if hasOrgRole(orgId, ["admin","accounting"]);
+      allow write: if false;
+    }
+  }
+}
