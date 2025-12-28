@@ -8,19 +8,16 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: 18
 
       - name: Install Firebase CLI
         run: npm i -g firebase-tools
-
-      - name: Write service account (raw JSON)
-        run: |
-          printf '%s' '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > /tmp/sa.json
-          echo "GOOGLE_APPLICATION_CREDENTIALS=/tmp/sa.json" >> $GITHUB_ENV
 
       - name: Build Web
         run: |
@@ -29,4 +26,4 @@ jobs:
           npm run build
 
       - name: Deploy (hosting only)
-        run: firebase deploy --project "${{ secrets.FIREBASE_PROJECT_ID }}" --only hosting
+        run: firebase deploy --project "${{ secrets.FIREBASE_PROJECT_ID }}" --only hosting --token "${{ secrets.FIREBASE_TOKEN }}"
