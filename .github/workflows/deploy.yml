@@ -11,6 +11,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # ✅ Authentication (يقرأ الـ Service Account من Secrets ويجهز الاعتماد تلقائيًا)
+      - name: Google Auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -18,11 +24,6 @@ jobs:
 
       - name: Install Firebase CLI
         run: npm i -g firebase-tools
-
-      - name: Write service account
-        run: |
-          printf '%s' "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}" > /tmp/sa.json
-          echo "GOOGLE_APPLICATION_CREDENTIALS=/tmp/sa.json" >> $GITHUB_ENV
 
       - name: Build Functions
         run: |
