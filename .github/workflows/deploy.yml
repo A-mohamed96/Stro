@@ -1,4 +1,4 @@
-name: Deploy to Firebase
+name: Deploy to Firebase (Hosting Only)
 
 on:
   push:
@@ -8,28 +8,19 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # ✅ Authentication (يقرأ الـ Service Account من Secrets ويجهز الاعتماد تلقائيًا)
-      - name: Google Auth
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 18
 
       - name: Install Firebase CLI
         run: npm i -g firebase-tools
 
-      - name: Build Functions
+      - name: Write service account (raw JSON)
         run: |
-          cd functions
-          npm install --no-audit --no-fund
-          npm run build
+          printf '%s' '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > /tmp/sa.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=/tmp/sa.json" >> $GITHUB_ENV
 
       - name: Build Web
         run: |
@@ -37,5 +28,5 @@ jobs:
           npm install --no-audit --no-fund
           npm run build
 
-      - name: Deploy (rules + functions + hosting)
-        run: firebase deploy --project "${{ secrets.FIREBASE_PROJECT_ID }}" --only firestore:rules,functions,hosting
+      - name: Deploy (hosting only)
+        run: firebase deploy --project "${{ secrets.FIREBASE_PROJECT_ID }}" --only hosting
